@@ -18,6 +18,7 @@
 	
 	"mounts": [
 		"source=${localWorkspaceFolder},target=/tmp/PlannerGAN_ws/src/PlannerGAN,type=bind,consistency=cached",
+		"source=${localWorkspaceFolder}/../iiwa_ros2,target=/tmp/PlannerGAN_ws/src/iiwa_ros2,type=bind,consistency=cached",
 	],
 	// "workspaceMount": "source=${localWorkspaceFolder},target=/tmp/benchmark_ws/src/benchmarks,type=bind,consistency=cached", 
 	"workspaceFolder": "/tmp/PlannerGAN_ws/",
@@ -39,8 +40,8 @@
 
 	"runArgs": [
 		"--privileged",
-		// "-e", "DISPLAY=host.docker.internal:0",
-		"-e", "DISPLAY=:1",
+		"-e", "DISPLAY=host.docker.internal:0",
+		// "-e", "DISPLAY=:1",
 		"-v", "/tmp/.X11-unix:/tmp/.X11-unix", 
 		"--device=/dev/input/js0", 
 		"--network=host"

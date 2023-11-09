@@ -68,11 +68,18 @@ RUN apt-get install -y \
     python3-wstool \
     python3-colcon-common-extensions
 
+# # Install Gazebo
+RUN apt-get install -y gazebo
+
+# # Install ROS 2 packages for Gazebo integration
+RUN apt-get install -y ros-humble-gazebo-ros-pkgs
+
 # Create the workspace directory
 RUN mkdir -p /tmp/PlannerGAN_ws/src
 
 # Expose a shell when the container is run
 CMD ["/bin/bash"]
+
 
 
 # # Use the official Ubuntu 22.04 as base image

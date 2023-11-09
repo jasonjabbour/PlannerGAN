@@ -16,8 +16,14 @@ Inside of the Docker
 ```shell
 
 # Go back to the root of your workspace
-cd /tmp/PlannerGAN_ws  
-colcon build --symlink-install
+cd /tmp/PlannerGAN_ws 
+
+# Install packages for iiwa_ros2
+vcs import src < src/iiwa_ros2/iiwa_ros2.repos
+rosdep install --ignore-src --from-paths . -y -r
+
+# Build
+colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install
 
 # Source the Overlay
 source /tmp/PlannerGAN_ws/install/setup.bash
