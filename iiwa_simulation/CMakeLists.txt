@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.5)
 project(iiwa_simulation)
 
 # Default to C99
@@ -17,18 +17,13 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(gazebo_ros REQUIRED)
+find_package(iiwa_description REQUIRED)
+find_package(robot_state_publisher REQUIRED)
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  find_package(ament_lint_common REQUIRED)
-  ament_lint_auto_find_test_dependencies()
-endif()
-
-# Install launch files
-install(DIRECTORY launch
+# Install launch files.
+install(DIRECTORY
+  launch
   DESTINATION share/${PROJECT_NAME}
 )
 
