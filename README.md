@@ -42,8 +42,6 @@ ros2 launch plannergan_iiwa iiwa_gazebo.launch.py use_sim:="true"
 ros2 launch plannergan_iiwa iiwa_gazebo_planning.launch.py use_sim:="true"
 ```
 
-```
-
 ![](captures/gazebo_setup.png)
 
 
