@@ -9,6 +9,8 @@ Outside of Docker Setup
 mkdir -p PlannerGAN_ws/src
 git clone https://github.com/ICube-Robotics/iiwa_ros2.git
 git clone https://github.com/jasonjabbour/PlannerGAN.git
+cd PlannerGAN
+code .
 ```
 
 Inside of Docker Each Time you Start Docker
@@ -20,11 +22,14 @@ cd /tmp/PlannerGAN_ws
 sudo apt-get update
 vcs import src < src/iiwa_ros2/iiwa_ros2.repos
 rosdep install --ignore-src --from-paths . -y -r
+
 ```
 
 Inside of Docker Each Time Before you Run a Script
 ```shell
-# Run this twice
+cd /tmp/PlannerGAN_ws 
+
+# Run this twice if you see errors (usually only happes the first time)
 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install
 
 source install/setup.bash
@@ -39,6 +44,8 @@ Launch Files to Choose from:
 ros2 launch plannergan_iiwa iiwa_gazebo.launch.py use_sim:="true"
 
 # Run a planning simulation
+# FIX THIS
+chmod +x /tmp/PlannerGAN_ws/install/plannergan_iiwa/lib/plannergan_iiwa/rrt_planning.py 
 ros2 launch plannergan_iiwa iiwa_gazebo_planning.launch.py use_sim:="true"
 ```
 
