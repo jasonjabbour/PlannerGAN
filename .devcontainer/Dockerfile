@@ -74,6 +74,9 @@ RUN apt-get install -y gazebo
 # # Install ROS 2 packages for Gazebo integration
 RUN apt-get install -y ros-humble-gazebo-ros-pkgs
 
+# Install the tree command
+RUN apt-get install -y tree
+
 # Create the workspace directory
 RUN mkdir -p /tmp/PlannerGAN_ws/src
 

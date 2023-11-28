@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(iiwa_simulation)
+project(plannergan_iiwa)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -25,6 +25,12 @@ find_package(robot_state_publisher REQUIRED)
 install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}
+)
+
+# Install Python scripts
+install(PROGRAMS
+  src/rrt_planning.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()
