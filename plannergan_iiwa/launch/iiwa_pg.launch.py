@@ -209,9 +209,9 @@ def generate_launch_description():
     # Running with Moveit2 planning
     iiwa_planning_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
-            FindPackageShare('iiwa_bringup'),
+            FindPackageShare('plannergan_iiwa'),
             '/launch',
-            '/iiwa_planning.launch.py'
+            '/iiwa_planning_pg.launch.py'
         ]),
         launch_arguments={
             'description_package': description_package,
@@ -324,12 +324,6 @@ def generate_launch_description():
         arguments=[robot_controller, '--controller-manager', [namespace, 'controller_manager']],
     )
 
-    rrt_planning = Node(
-        package='plannergan_iiwa',
-        executable='rrt_planning.py', 
-        output='screen',
-    )
-
     # Delay `joint_state_broadcaster` after spawn_entity
     delay_joint_state_broadcaster_spawner_after_spawn_entity = RegisterEventHandler(
         event_handler=OnProcessExit(
@@ -377,7 +371,6 @@ def generate_launch_description():
         delay_rviz_after_joint_state_broadcaster_spawner,
         external_torque_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
-        rrt_planning
     ]
 
     return LaunchDescription(declared_arguments + nodes)

@@ -40,13 +40,11 @@ export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:/tmp/PlannerGAN_ws/src/iiwa_ros2
 
 Launch Files to Choose from:
 ```shell
-# Run only the simulation
-ros2 launch plannergan_iiwa iiwa_gazebo.launch.py use_sim:="true"
+# Run the simulation and planning
+ros2 launch plannergan_iiwa iiwa_pg.launch.py use_sim:="true" use_planning:="true"
 
-# Run a planning simulation
-# FIX THIS
-chmod +x /tmp/PlannerGAN_ws/install/plannergan_iiwa/lib/plannergan_iiwa/rrt_planning.py 
-ros2 launch plannergan_iiwa iiwa_gazebo_planning.launch.py use_sim:="true"
+ros2 run plannergan_iiwa motion_planning_node
+
 ```
 
 ![](captures/gazebo_setup.png)
