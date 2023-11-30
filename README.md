@@ -43,16 +43,7 @@ Launch Files to Choose from:
 # Run the simulation and planning
 ros2 launch plannergan_iiwa iiwa_pg.launch.py use_sim:="true" use_planning:="true"
 
-ros2 run plannergan_iiwa motion_planning_node
-
 ```
 
 ![](captures/gazebo_setup.png)
 
-
-## Backup Commands
-
-```shell
-colcon build --merge-install --packages-up-to plannergan_iiwa
-
-```

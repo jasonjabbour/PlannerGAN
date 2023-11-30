@@ -189,6 +189,7 @@ def generate_launch_description():
             planning_scene_monitor_parameters,
             move_group_capabilities,
             {"use_sim_time": use_sim},
+            {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
         ],
     )
 
@@ -210,6 +211,7 @@ def generate_launch_description():
                 planning_scene_monitor_parameters,
                 move_group_capabilities,
                 {"use_sim_time": use_sim},
+                {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
             ],
         )
 
@@ -232,6 +234,7 @@ def generate_launch_description():
             robot_description_kinematics,
             planning_pipelines_config,
             ompl_planning_config,
+            {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
         ],
         condition=IfCondition(start_rviz),
     )

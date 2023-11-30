@@ -1,6 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <geometry_msgs/msg/pose.hpp>
+#include <thread> // Include this header for std::this_thread::sleep_for
 
 class MotionPlanningNode : public rclcpp::Node
 {
@@ -16,7 +17,6 @@ public:
 private:
     void init()
     {
-
         // Initialize MoveIt
         auto move_group_interface = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
             shared_from_this(), "iiwa_arm");
@@ -28,8 +28,17 @@ private:
         target_pose.position.z = 0.5;
         target_pose.orientation.w = 1.0;
 
+        RCLCPP_INFO(this->get_logger(), "********************Waiting before planning...");
+
+        // Delay for a specified amount of time (e.g., 5 seconds)
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+
+        RCLCPP_INFO(this->get_logger(), "Resuming planning...");
+
         // Set the target
         move_group_interface->setPoseTarget(target_pose);
+        // Set the Planning Algorithm 
+        move_group_interface->setPlannerId("RRTConnectkConfigDefault");
 
         // Plan to the new pose
         moveit::planning_interface::MoveGroupInterface::Plan my_plan;
