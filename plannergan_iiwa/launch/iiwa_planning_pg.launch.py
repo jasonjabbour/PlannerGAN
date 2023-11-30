@@ -193,6 +193,7 @@ def generate_launch_description():
         ],
     )
 
+
     motion_planning_node = Node(
             package='plannergan_iiwa',  
             executable='motion_planning_node',  

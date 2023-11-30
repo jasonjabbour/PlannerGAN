@@ -41,6 +41,10 @@ ament_target_dependencies(motion_planning_node
   rclcpp
   moveit_ros_planning_interface
   geometry_msgs
+  moveit_core
+  tf2
+  tf2_ros
+  tf2_eigen
 )
 
 # Install executable

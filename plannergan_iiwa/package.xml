@@ -12,6 +12,12 @@
   <depend>rclcpp</depend>
   <depend>moveit_ros_planning_interface</depend>
   <depend>geometry_msgs</depend>
+
+  <depend>moveit_core</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_eigen</depend>
+
   <exec_depend>gazebo_ros</exec_depend>
   <exec_depend>iiwa_description</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
