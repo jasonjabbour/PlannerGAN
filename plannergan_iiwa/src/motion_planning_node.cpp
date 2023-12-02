@@ -27,6 +27,9 @@ public:
         // Set the target pose
         move_group.setPoseTarget(target_pose);
 
+        // Set the planner to RRT
+        move_group.setPlannerId("RRTkConfigDefault");
+
         // Perform planning
         moveit::planning_interface::MoveGroupInterface::Plan my_plan;
         bool success = (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS);
