@@ -8,7 +8,7 @@ Outside of Docker Setup
 ```shell 
 mkdir -p PlannerGAN_ws/src
 cd PlannerGAN_ws/src
-git clone https://github.com/ICube-Robotics/iiwa_ros2.git
+git clone https://github.com/jasonjabbour/iiwa_ros2.git
 git clone https://github.com/jasonjabbour/PlannerGAN.git
 cd PlannerGAN
 code .

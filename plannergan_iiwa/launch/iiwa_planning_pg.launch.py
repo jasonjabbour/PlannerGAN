@@ -152,6 +152,11 @@ def generate_launch_description():
         ]
     )
 
+    chomp_planning_config = PathJoinSubstitution([
+            FindPackageShare(description_package), "moveit2", "chomp_planning.yaml",
+        ]
+    )
+
     moveit_controllers = PathJoinSubstitution(
         [FindPackageShare(description_package),
             "moveit2", "iiwa_moveit_controller_config.yaml"]
@@ -184,6 +189,7 @@ def generate_launch_description():
             robot_description_planning_joint_limits,
             planning_pipelines_config,
             ompl_planning_config,
+            chomp_planning_config,
             trajectory_execution,
             moveit_controllers,
             planning_scene_monitor_parameters,
@@ -207,6 +213,7 @@ def generate_launch_description():
                 robot_description_planning_joint_limits,
                 planning_pipelines_config,
                 ompl_planning_config,
+                chomp_planning_config,
                 trajectory_execution,
                 moveit_controllers,
                 planning_scene_monitor_parameters,
@@ -235,6 +242,7 @@ def generate_launch_description():
             robot_description_kinematics,
             planning_pipelines_config,
             ompl_planning_config,
+            chomp_planning_config,
             {"use_sim_time": True},
             {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
         ],
