@@ -25,8 +25,14 @@ public:
         std::vector<std::vector<geometry_msgs::msg::Pose>> rrt_joint_poses;
         std::vector<std::vector<geometry_msgs::msg::Pose>> chomp_joint_poses;
 
+        // Vector to store poses of the end effector for each point in the trajectory
+        std::vector<geometry_msgs::msg::Pose> rrt_end_effector_poses;
+        std::vector<geometry_msgs::msg::Pose> chomp_end_effector_poses;
+
         // 2D Vector to store poses for each joint at each point in the trajectory
         std::vector<std::vector<geometry_msgs::msg::Pose>> all_joint_poses;
+        // Vector to store end effector poses at each point in the trajectory
+        std::vector<geometry_msgs::msg::Pose> end_effector_poses;
 
         // Declare plans for RRT and CHOMP
         moveit::planning_interface::MoveGroupInterface::Plan rrt_plan;
@@ -46,12 +52,24 @@ public:
 
         // Execute planning using the RRT algorithm
         RCLCPP_INFO(this->get_logger(), "Starting planning with RRT...");
-        rrt_success = plan_and_execute(move_group, "RRTkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time, rrt_plan);
+        rrt_success = plan_and_execute(move_group,
+                                      "RRTkConfigDefault",
+                                       target_pose,
+                                       end_effector_poses,
+                                       all_joint_poses,
+                                       path_length,
+                                       smoothness,
+                                       planning_time,
+                                       execution_time,
+                                       rrt_plan);
         RCLCPP_INFO(this->get_logger(), "RRT Planning and execution complete");
 
         // Execute planning using RRT and save the poses if successful
         if (rrt_success) {
-            rrt_joint_poses = all_joint_poses; // Save RRT poses
+            // Save RRT poses
+            rrt_joint_poses = all_joint_poses; 
+            // Save end effector poses
+            rrt_end_effector_poses = end_effector_poses; 
         }
 
         // Reset the robot to its start position
@@ -59,18 +77,32 @@ public:
 
         // Execute planning using the CHOMP algorithm
         RCLCPP_INFO(this->get_logger(), "Starting planning with CHOMP...");
-        chomp_success = plan_and_execute(move_group, "CHOMPkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time, chomp_plan);
+        chomp_success = plan_and_execute(move_group,
+                                        "CHOMPkConfigDefault", 
+                                        target_pose, 
+                                        end_effector_poses,
+                                        all_joint_poses, 
+                                        path_length, 
+                                        smoothness, 
+                                        planning_time, 
+                                        execution_time, 
+                                        chomp_plan);
         RCLCPP_INFO(this->get_logger(), "CHOMP Planning and execution complete");
 
         // Execute planning using CHOMP and save the poses if successful
         if (chomp_success) {
-            chomp_joint_poses = all_joint_poses; // Save CHOMP poses
+            // Save CHOMP poses
+            chomp_joint_poses = all_joint_poses;
+            // Save CHOMP end effector poses
+            chomp_end_effector_poses = end_effector_poses; 
         }
 
         // Save data to CSV if both plans are successful
         if (rrt_success && chomp_success) {
             // Save trajectory data to CSV
             save_trajectory_data_to_csv(rrt_plan, chomp_plan, pair_id); 
+            // Save end effector data to CSV
+            save_end_effector_position_data_to_csv(rrt_end_effector_poses, chomp_end_effector_poses, pair_id);
             // Save joint position data to CSV
             save_joint_position_data_to_csv(rrt_joint_poses, chomp_joint_poses, pair_id);
             // Increment pair id
@@ -85,6 +117,7 @@ private:
     bool plan_and_execute(moveit::planning_interface::MoveGroupInterface& move_group, 
                           const std::string& planner_id, 
                           const geometry_msgs::msg::Pose& target_pose, 
+                          std::vector<geometry_msgs::msg::Pose>& end_effector_poses,
                           std::vector<std::vector<geometry_msgs::msg::Pose>>& all_joint_poses,
                           double& path_length, 
                           double& smoothness, 
@@ -109,6 +142,9 @@ private:
             end_time = std::chrono::steady_clock::now(); // End timing the execution
             execution_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count(); // Calculate execution time
 
+            // Get end effectors positions from the plan
+            traj2position(plan, end_effector_poses);
+
             // Get all joint positions from the plan
             traj2allJointPositions(plan, all_joint_poses);
  
@@ -122,6 +158,32 @@ private:
         }
 
         return success;
+    }
+
+    // Function to convert joint trajectory the end effector position
+    void traj2position(const moveit::planning_interface::MoveGroupInterface::Plan& plan, 
+                       std::vector<geometry_msgs::msg::Pose>& end_effector_poses){
+        // Load the robot model
+        robot_model_loader::RobotModelLoader robot_model_loader(this->shared_from_this(), "robot_description");
+        moveit::core::RobotModelPtr kinematic_model = robot_model_loader.getModel();
+        // Create object to perform kinematic calculations
+        auto kinematic_state = std::make_shared<moveit::core::RobotState>(kinematic_model);
+
+        // Clear the vector
+        end_effector_poses.clear();
+
+        // For each trajectory point, set the joint values and compute the forward kinematics
+        for (const auto& point : plan.trajectory_.joint_trajectory.points) {
+            kinematic_state->setJointGroupPositions("iiwa_arm", point.positions);
+            kinematic_state->enforceBounds();
+            // Replace "tool0" with your end-effector link name
+            const Eigen::Isometry3d& end_effector_state = kinematic_state->getGlobalLinkTransform("tool0"); 
+
+            // Convert Eigen::Isometry3d to geometry_ms gs::msg::Pose
+            geometry_msgs::msg::Pose pose;
+            tf2::convert(end_effector_state, pose);
+            end_effector_poses.push_back(pose);
+        }
     }
 
 
@@ -254,6 +316,40 @@ private:
         }
     }
 
+    // Function to save the end effector position data to CSV
+    void save_end_effector_position_data_to_csv(
+        const std::vector<geometry_msgs::msg::Pose>& rrt_end_effector_poses, 
+        const std::vector<geometry_msgs::msg::Pose>& chomp_end_effector_poses, 
+        int pair_id) {
+        
+        const std::string filename = "src/PlannerGAN/data/end_effector_positions_data.csv";
+        std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
+
+        // Check if the file is new or empty to write the header
+        bool write_header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
+
+        if (csv_file.is_open()) {
+            // Write header if needed
+            if (write_header) {
+                csv_file << "PairID,Algorithm,X,Y,Z\n";
+            }
+
+            // Save RRT end effector positions
+            for (const auto& pose : rrt_end_effector_poses) {
+                csv_file << pair_id << ",RRT," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
+            }
+
+            // Save CHOMP end effector positions
+            for (const auto& pose : chomp_end_effector_poses) {
+                csv_file << pair_id << ",CHOMP," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
+            }
+
+            csv_file.close();
+            RCLCPP_INFO(this->get_logger(), "End effector position data saved to %s", filename.c_str());
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
+        }
+    }
 
     // Function to save the joint position data to CSV
     void save_joint_position_data_to_csv(const std::vector<std::vector<geometry_msgs::msg::Pose>>& rrt_poses, 
@@ -307,4 +403,7 @@ int main(int argc, char** argv) {
     rclcpp::shutdown();
     return 0;
 }
+
+
+
 
