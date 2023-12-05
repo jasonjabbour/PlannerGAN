@@ -12,14 +12,26 @@
 // Define the class for the motion planning node
 class MotionPlanningNode : public rclcpp::Node {
 public:
+
+    // Public member variable
+    int pair_id = 0;
+
     // Constructor for the node
     explicit MotionPlanningNode(const rclcpp::NodeOptions& options)
     : Node("motion_planning_node", options) {}
 
+    // Run the planning function n times
+    void start_planning_n_samples(int n_samples){
+
+        for (int i = 0; i < n_samples; ++i) {
+            RCLCPP_INFO(this->get_logger(), "****Sample Number: %d. Pair ID: %d****", i, pair_id);
+            start_planning();
+        }
+
+    }
+
     // Main planning function
     void start_planning() {
-        // Make pair_id static so its value is retained across function calls
-        static int pair_id = 0;  
 
         // Separate vectors for RRT and CHOMP end effector poses
         std::vector<std::vector<geometry_msgs::msg::Pose>> rrt_joint_poses;
@@ -49,6 +61,9 @@ public:
         double path_length, smoothness;
         long int planning_time, execution_time;
         bool rrt_success = false, chomp_success = false; // Flags for the success of each planning algorithm
+
+        // Reset the robot to its start position
+        reset_to_start_position(move_group);
 
         // Execute planning using the RRT algorithm
         RCLCPP_INFO(this->get_logger(), "Starting planning with RRT...");
@@ -398,7 +413,11 @@ private:
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
-    node->start_planning();
+
+    // Run the planning 10 times
+    int n_samples = 10;  
+    node->start_planning_n_samples(n_samples);
+
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;
