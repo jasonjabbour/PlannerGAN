@@ -18,7 +18,14 @@ public:
 
     // Constructor for the node
     explicit MotionPlanningNode(const rclcpp::NodeOptions& options)
-    : Node("motion_planning_node", options) {}
+    : Node("motion_planning_node", options) {
+        
+        // File name to get the last pair id created
+        const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
+        // Update the pair id
+        pair_id = get_last_pair_id_from_csv(filename) + 1;
+
+    }
 
     // Run the planning function n times
     void start_planning_n_samples(int n_samples){
@@ -408,6 +415,50 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
         }
     }
+
+
+    // Function to get the last pair_id used, from a CSV file
+    int get_last_pair_id_from_csv(const std::string& filename) {
+
+        // Open the file for reading
+        std::ifstream file(filename);
+        
+        // String variables to store the current line being read, and the last non-empty line found
+        std::string line;
+        std::string last_line;
+
+        // Check if the file was successfully opened
+        if (file.is_open()) {
+            // Read the file line by line
+            while (getline(file, line)) {
+                // Check if the line is not empty
+                if (!line.empty()) {
+                    // Update last_line with the current line
+                    last_line = line;
+                }
+            }
+            // Close the file after reading
+            file.close();
+        }
+
+        // Check if we have found a last line in the file
+        if (!last_line.empty()) {
+            // Use a stringstream to parse the line
+            std::stringstream ss(last_line);
+            std::string item;
+
+            // Read the first item from the line (up to the first comma),
+            // which is expected to be the pair_id
+            getline(ss, item, ',');
+
+            // Convert the extracted item (pair_id) from string to integer and return it
+            return std::stoi(item);
+        }
+
+        // If the file is empty or doesn't exist, return 0 as the default pair_id
+        return 0;
+    }
+
 };
 
 int main(int argc, char** argv) {
