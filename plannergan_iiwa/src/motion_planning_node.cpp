@@ -28,6 +28,10 @@ public:
         // 2D Vector to store poses for each joint at each point in the trajectory
         std::vector<std::vector<geometry_msgs::msg::Pose>> all_joint_poses;
 
+        // Declare plans for RRT and CHOMP
+        moveit::planning_interface::MoveGroupInterface::Plan rrt_plan;
+        moveit::planning_interface::MoveGroupInterface::Plan chomp_plan;
+
         // Initialize the MoveGroupInterface for the robot arm
         moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
         rclcpp::sleep_for(std::chrono::seconds(5)); // Allow time for initialization
@@ -42,7 +46,7 @@ public:
 
         // Execute planning using the RRT algorithm
         RCLCPP_INFO(this->get_logger(), "Starting planning with RRT...");
-        rrt_success = plan_and_execute(move_group, "RRTkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time);
+        rrt_success = plan_and_execute(move_group, "RRTkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time, rrt_plan);
         RCLCPP_INFO(this->get_logger(), "RRT Planning and execution complete");
 
         // Execute planning using RRT and save the poses if successful
@@ -55,7 +59,7 @@ public:
 
         // Execute planning using the CHOMP algorithm
         RCLCPP_INFO(this->get_logger(), "Starting planning with CHOMP...");
-        chomp_success = plan_and_execute(move_group, "CHOMPkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time);
+        chomp_success = plan_and_execute(move_group, "CHOMPkConfigDefault", target_pose, all_joint_poses, path_length, smoothness, planning_time, execution_time, chomp_plan);
         RCLCPP_INFO(this->get_logger(), "CHOMP Planning and execution complete");
 
         // Execute planning using CHOMP and save the poses if successful
@@ -65,7 +69,9 @@ public:
 
         // Save data to CSV if both plans are successful
         if (rrt_success && chomp_success) {
-            // Save data to CSV
+            // Save trajectory data to CSV
+            save_trajectory_data_to_csv(rrt_plan, chomp_plan, pair_id); 
+            // Save joint position data to CSV
             save_joint_position_data_to_csv(rrt_joint_poses, chomp_joint_poses, pair_id);
             // Increment pair id
             pair_id++; 
@@ -83,13 +89,13 @@ private:
                           double& path_length, 
                           double& smoothness, 
                           long int& planning_time, 
-                          long int& execution_time) {
+                          long int& execution_time, 
+                          moveit::planning_interface::MoveGroupInterface::Plan& plan) {
         // Set the planner ID and target pose for planning
         move_group.setPlannerId(planner_id);
         move_group.setPoseTarget(target_pose);
 
         // Perform the planning
-        moveit::planning_interface::MoveGroupInterface::Plan plan;
         auto start_time = std::chrono::steady_clock::now(); // Start timing the planning
         bool success = (move_group.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
         auto end_time = std::chrono::steady_clock::now(); // End timing the planning
@@ -204,6 +210,51 @@ private:
         // Calculate smoothness (implementation depends on your definition of smoothness)
     }
 
+
+    // Function to save the trajectory data to a CSV 
+    void save_trajectory_data_to_csv(const moveit::planning_interface::MoveGroupInterface::Plan& rrt_plan, 
+                                 const moveit::planning_interface::MoveGroupInterface::Plan& chomp_plan, 
+                                 int pair_id) {
+        const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
+        std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
+
+        bool write_header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
+
+        if (csv_file.is_open()) {
+            if (write_header) {
+                csv_file << "PairID,Algorithm";
+                for (int i = 1; i <= 7; ++i) {
+                    csv_file << ",Joint" << i;
+                }
+                csv_file << "\n";
+            }
+
+            // Save RRT trajectory
+            for (const auto& point : rrt_plan.trajectory_.joint_trajectory.points) {
+                csv_file << pair_id << ",RRT";
+                for (const auto& position : point.positions) {
+                    csv_file << "," << position;
+                }
+                csv_file << "\n";
+            }
+
+            // Save CHOMP trajectory
+            for (const auto& point : chomp_plan.trajectory_.joint_trajectory.points) {
+                csv_file << pair_id << ",CHOMP";
+                for (const auto& position : point.positions) {
+                    csv_file << "," << position;
+                }
+                csv_file << "\n";
+            }
+
+            csv_file.close();
+            RCLCPP_INFO(this->get_logger(), "Trajectory data saved to %s", filename.c_str());
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
+        }
+    }
+
+
     // Function to save the joint position data to CSV
     void save_joint_position_data_to_csv(const std::vector<std::vector<geometry_msgs::msg::Pose>>& rrt_poses, 
                         const std::vector<std::vector<geometry_msgs::msg::Pose>>& chomp_poses, 
@@ -256,274 +307,4 @@ int main(int argc, char** argv) {
     rclcpp::shutdown();
     return 0;
 }
-
-// #include <rclcpp/rclcpp.hpp>
-// #include <moveit/move_group_interface/move_group_interface.h>
-// #include <geometry_msgs/msg/pose.hpp>
-// #include <trajectory_msgs/msg/joint_trajectory.hpp>
-// #include <moveit/robot_model_loader/robot_model_loader.h>
-// #include <moveit/robot_state/robot_state.h>
-// #include <tf2_eigen/tf2_eigen.hpp>
-// #include <chrono>
-
-// class MotionPlanningNode : public rclcpp::Node {
-// public:
-//     explicit MotionPlanningNode(const rclcpp::NodeOptions& options)
-//     : Node("motion_planning_node", options) {}
-
-//     void start_planning() {
-//         // Initialize MoveGroupInterface
-//         moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
-
-//         // Sleep to allow everything to initialize
-//         rclcpp::sleep_for(std::chrono::seconds(5));
-
-//         // Define the target pose for the end effector
-//         geometry_msgs::msg::Pose target_pose = create_target_pose();
-
-//         double path_length, smoothness;
-//         long int planning_time, execution_time;
-
-//         // Plan and execute using RRT
-//         RCLCPP_INFO(this->get_logger(), "Starting planning with RRT...");
-//         plan_and_execute(move_group, "RRTkConfigDefault", target_pose, path_length, smoothness, planning_time, execution_time);
-//         RCLCPP_INFO(this->get_logger(), "RRT Planning and execution complete");
-
-//         // Reset arm to start position
-//         RCLCPP_INFO(this->get_logger(), "Resetting to start position...");
-//         reset_to_start_position(move_group);
-
-//         // Plan and execute using CHOMP
-//         RCLCPP_INFO(this->get_logger(), "Starting planning with CHOMP...");
-//         plan_and_execute(move_group, "CHOMPkConfigDefault", target_pose, path_length, smoothness, planning_time, execution_time); // Assuming this is your CHOMP config name
-//         RCLCPP_INFO(this->get_logger(), "CHOMP Planning and execution complete");
-//     }
-
-// private:
-//     void plan_and_execute(moveit::planning_interface::MoveGroupInterface& move_group, 
-//                         const std::string& planner_id, 
-//                         const geometry_msgs::msg::Pose& target_pose, 
-//                         double& path_length, 
-//                         double& smoothness, 
-//                         long int& planning_time, 
-//                         long int& execution_time) {
-
-
-//         // Set the planner ID and target pose
-//         move_group.setPlannerId(planner_id);
-//         move_group.setPoseTarget(target_pose);
-
-//         // Perform planning
-//         moveit::planning_interface::MoveGroupInterface::Plan plan;
-//         auto start_time = std::chrono::steady_clock::now();
-//         bool success = (move_group.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
-//         auto end_time = std::chrono::steady_clock::now();
-//         planning_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-//         if (success) {
-//             RCLCPP_INFO(this->get_logger(), "Plan successful, executing...");
-//             start_time = std::chrono::steady_clock::now();
-//             move_group.move(); // Execute the plan
-//             end_time = std::chrono::steady_clock::now();
-//             execution_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-//             // Get position data
-//             traj2position(plan)
-
-//             // Analyze the trajectory
-//             analyze_trajectory(plan.trajectory_.joint_trajectory, path_length, smoothness);
-//             RCLCPP_INFO(this->get_logger(), "Path Length: %f, Smoothness: %f", path_length, smoothness);
-//             RCLCPP_INFO(this->get_logger(), "Planning Time: %ld ms, Execution Time: %ld ms", planning_time, execution_time);
-//         } else {
-//             RCLCPP_WARN(this->get_logger(), "Planning failed.");
-//         }
-//     }
-
-//     geometry_msgs::msg::Pose create_target_pose() {
-//         geometry_msgs::msg::Pose pose;
-//         pose.position.x = 0.4;
-//         pose.position.y = 0.1;
-//         pose.position.z = 0.7;
-//         pose.orientation.w = 1.0;
-//         return pose;
-//     }
-
-//     void reset_to_start_position(moveit::planning_interface::MoveGroupInterface& move_group) {
-//         std::map<std::string, double> joint_values;
-//         joint_values["joint_a1"] = 0.0;
-//         joint_values["joint_a2"] = -0.7854;
-//         joint_values["joint_a3"] = 0.0;
-//         joint_values["joint_a4"] = 1.3962;
-//         joint_values["joint_a5"] = 0.0;
-//         joint_values["joint_a6"] = 0.6109;
-//         joint_values["joint_a7"] = 0.0;
-
-//         move_group.setJointValueTarget(joint_values);
-//         bool success = (move_group.move() == moveit::core::MoveItErrorCode::SUCCESS);
-
-//         if (success) {
-//             RCLCPP_INFO(this->get_logger(), "Robot successfully reset to start position");
-//         } else {
-//             RCLCPP_WARN(this->get_logger(), "Failed to reset robot to start position");
-//         }
-//     }
-
-//     void traj2position(const moveit::planning_interface::MoveGroupInterface::Plan& plan){
-//             // Load the robot model
-//             robot_model_loader::RobotModelLoader robot_model_loader(this->shared_from_this(), "robot_description");
-//             moveit::core::RobotModelPtr kinematic_model = robot_model_loader.getModel();
-//             auto kinematic_state = std::make_shared<moveit::core::RobotState>(kinematic_model);
-
-//             // Create object to perform kinematic calculations
-//             auto kinematic_state = std::make_shared<moveit::core::RobotState>(kinematic_model);
-
-//             // For each trajectory point, set the joint values and compute the forward kinematics
-//             std::vector<geometry_msgs::msg::Pose> end_effector_poses;
-
-//             for (const auto& point : plan.trajectory_.joint_trajectory.points) {
-//                 kinematic_state->setJointGroupPositions("iiwa_arm", point.positions);
-//                 kinematic_state->enforceBounds();
-//                 const Eigen::Isometry3d& end_effector_state = kinematic_state->getGlobalLinkTransform("tool0"); // Replace "tool0" with your end-effector link name
-
-//                 // Convert Eigen::Isometry3d to geometry_ms gs::msg::Pose
-//                 geometry_msgs::msg::Pose pose;
-//                 tf2::convert(end_effector_state, pose);
-//                 end_effector_poses.push_back(pose);
-//             }
-//     }
-
-//     void analyze_trajectory(const trajectory_msgs::msg::JointTrajectory& trajectory,
-//                             double& path_length, 
-//                             double& smoothness) {
-//         path_length = 0.0;
-//         smoothness = 0.0;
-
-//         // Example calculation for path length
-//         for (size_t i = 1; i < trajectory.points.size(); ++i) {
-//             const auto& prev_point = trajectory.points[i - 1];
-//             const auto& current_point = trajectory.points[i];
-
-//             double segment_length = 0.0;
-//             for (size_t j = 0; j < prev_point.positions.size(); ++j) {
-//                 segment_length += std::pow(current_point.positions[j] - prev_point.positions[j], 2);
-//             }
-//             path_length += std::sqrt(segment_length);
-//         }
-
-//         // Example calculation for smoothness (simple version)
-//         // ... [implement your smoothness calculation here]
-
-//         RCLCPP_INFO(this->get_logger(), "Path Length: %f, Smoothness: %f", path_length, smoothness);
-//     }
-// };
-
-// int main(int argc, char** argv) {
-//     rclcpp::init(argc, argv);
-//     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
-//     node->start_planning();
-//     rclcpp::spin(node);
-//     rclcpp::shutdown();
-//     return 0;
-// }
-
-// ORIGINAL *******************
-
-// #include <rclcpp/rclcpp.hpp>
-// #include <moveit/move_group_interface/move_group_interface.h>
-// #include <geometry_msgs/msg/pose.hpp>
-// #include <chrono>
-
-// class MotionPlanningNode : public rclcpp::Node {
-// public:
-//     explicit MotionPlanningNode(const rclcpp::NodeOptions& options)
-//     : Node("motion_planning_node", options) {}
-
-//     void start_planning() {
-//         // Create the MoveGroupInterface after the node has been constructed
-//         moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
-
-//         // Sleep to allow everything to initialize
-//         rclcpp::sleep_for(std::chrono::seconds(5));
-
-//         // Define the target pose for the end effector
-//         geometry_msgs::msg::Pose target_pose = create_target_pose();
-
-//         // Plan and execute using RRT
-//         plan_and_execute(move_group, "RRTkConfigDefault", target_pose);
-
-//         RCLCPP_INFO(this->get_logger(), "!!!!RRT Arrived at Target!!!!");
-//         rclcpp::sleep_for(std::chrono::seconds(10));
-
-//         // Reset arm to start position 
-//         reset_to_start_position(move_group);
-
-//         RCLCPP_INFO(this->get_logger(), "!!!!Reset to Original Position!!!!");
-//         rclcpp::sleep_for(std::chrono::seconds(10));
-
-//         // Plan and execute using CHOMP
-//         plan_and_execute(move_group, "CHOMPkConfigDefault", target_pose); // Assuming this is your CHOMP config name
-    
-//         RCLCPP_INFO(this->get_logger(), "!!!!CHOMP Arrived at Target!!!!");
-
-//     }
-
-// private:
-//     void plan_and_execute(moveit::planning_interface::MoveGroupInterface& move_group, const std::string& planner_id, const geometry_msgs::msg::Pose& target_pose) {
-//         RCLCPP_INFO(this->get_logger(), "Planning with %s", planner_id.c_str());
-//         move_group.setPlannerId(planner_id);
-//         move_group.setPoseTarget(target_pose);
-
-//         moveit::planning_interface::MoveGroupInterface::Plan plan;
-//         bool success = (move_group.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
-
-//         if (success) {
-//             RCLCPP_INFO(this->get_logger(), "Plan successful, executing...");
-//             move_group.move(); // Execute the plan
-//         } else {
-//             RCLCPP_WARN(this->get_logger(), "Planning failed.");
-//         }
-//     }
-
-//     geometry_msgs::msg::Pose create_target_pose() {
-//         geometry_msgs::msg::Pose pose;
-//         pose.position.x = 0.4;
-//         pose.position.y = 0.1;
-//         pose.position.z = 0.7;
-//         pose.orientation.w = 1.0;
-//         return pose;
-//     }
-
-//     void reset_to_start_position(moveit::planning_interface::MoveGroupInterface& move_group) {
-//         RCLCPP_INFO(this->get_logger(), "Resetting to start position using joint values");
-
-//         std::map<std::string, double> joint_values;
-//         joint_values["joint_a1"] = 0.0;
-//         joint_values["joint_a2"] = -0.7854;
-//         joint_values["joint_a3"] = 0.0;
-//         joint_values["joint_a4"] = 1.3962;
-//         joint_values["joint_a5"] = 0.0;
-//         joint_values["joint_a6"] = 0.6109;
-//         joint_values["joint_a7"] = 0.0;
-
-//         move_group.setJointValueTarget(joint_values);
-//         bool success = (move_group.move() == moveit::core::MoveItErrorCode::SUCCESS);
-
-//         if (success) {
-//             RCLCPP_INFO(this->get_logger(), "Robot successfully reset to start position");
-//         } else {
-//             RCLCPP_WARN(this->get_logger(), "Failed to reset robot to start position");
-//         }
-//     }
-
-// };
-
-// int main(int argc, char** argv) {
-//     rclcpp::init(argc, argv);
-//     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
-//     node->start_planning();
-//     rclcpp::spin(node);
-//     rclcpp::shutdown();
-//     return 0;
-// }
-
 
