@@ -65,8 +65,8 @@ public:
         geometry_msgs::msg::Pose target_pose = create_target_pose();
 
         // Variables to store various metrics
-        double path_length, smoothness;
-        long int planning_time, execution_time;
+        double rrt_path_length, rrt_smoothness, chomp_path_length, chomp_smoothness;
+        long int rrt_planning_time, rrt_execution_time, chomp_planning_time, chomp_execution_time;
         bool rrt_success = false, chomp_success = false; // Flags for the success of each planning algorithm
 
         // Reset the robot to its start position
@@ -79,10 +79,10 @@ public:
                                        target_pose,
                                        end_effector_poses,
                                        all_joint_poses,
-                                       path_length,
-                                       smoothness,
-                                       planning_time,
-                                       execution_time,
+                                       rrt_path_length,
+                                       rrt_smoothness,
+                                       rrt_planning_time,
+                                       rrt_execution_time,
                                        rrt_plan);
         RCLCPP_INFO(this->get_logger(), "RRT Planning and execution complete");
 
@@ -104,10 +104,10 @@ public:
                                         target_pose, 
                                         end_effector_poses,
                                         all_joint_poses, 
-                                        path_length, 
-                                        smoothness, 
-                                        planning_time, 
-                                        execution_time, 
+                                        chomp_path_length, 
+                                        chomp_smoothness, 
+                                        chomp_planning_time, 
+                                        chomp_execution_time, 
                                         chomp_plan);
         RCLCPP_INFO(this->get_logger(), "CHOMP Planning and execution complete");
 
@@ -127,6 +127,9 @@ public:
             save_end_effector_position_data_to_csv(rrt_end_effector_poses, chomp_end_effector_poses, pair_id);
             // Save joint position data to CSV
             save_joint_position_data_to_csv(rrt_joint_poses, chomp_joint_poses, pair_id);
+            // Save RRT and CHOMP metrics to CSV
+            save_metrics_to_csv("RRT", pair_id, rrt_planning_time, rrt_execution_time, rrt_smoothness, rrt_path_length);
+            save_metrics_to_csv("CHOMP", pair_id, chomp_planning_time, chomp_execution_time, chomp_smoothness, chomp_path_length);
             // Increment pair id
             pair_id++; 
         }
@@ -279,6 +282,11 @@ private:
         path_length = 0.0; // Reset path length
         smoothness = 0.0;  // Reset smoothness
 
+        if (trajectory.points.size() < 3) {
+            RCLCPP_WARN(this->get_logger(), "Not enough points in trajectory to calculate smoothness.");
+            return;
+        }
+
         // Calculate the path length
         for (size_t i = 1; i < trajectory.points.size(); ++i) {
             const auto& prev_point = trajectory.points[i - 1];
@@ -291,44 +299,74 @@ private:
             }
             path_length += std::sqrt(segment_length);
         }
-        // Calculate smoothness (implementation depends on your definition of smoothness)
+
+        // Calculate smoothness based on acceleration changes
+        double total_acceleration_change = 0.0;
+        for (size_t i = 2; i < trajectory.points.size(); ++i) {
+            const auto& prev_accel = trajectory.points[i - 1].accelerations;
+            const auto& curr_accel = trajectory.points[i].accelerations;
+
+            if (prev_accel.size() != curr_accel.size()) {
+                RCLCPP_WARN(this->get_logger(), "Inconsistent acceleration vector size.");
+                continue;
+            }
+
+            double acceleration_change = 0.0;
+            for (size_t j = 0; j < curr_accel.size(); ++j) {
+                double diff = curr_accel[j] - prev_accel[j];
+                acceleration_change += diff * diff;
+            }
+            total_acceleration_change += std::sqrt(acceleration_change);
+        }
+
+        // Calculate average acceleration change per step
+        smoothness = total_acceleration_change / (trajectory.points.size() - 2);
     }
 
-
-    // Function to save the trajectory data to a CSV 
+    // Function to save the trajectory data to a CSV file
     void save_trajectory_data_to_csv(const moveit::planning_interface::MoveGroupInterface::Plan& rrt_plan, 
-                                 const moveit::planning_interface::MoveGroupInterface::Plan& chomp_plan, 
-                                 int pair_id) {
+                                    const moveit::planning_interface::MoveGroupInterface::Plan& chomp_plan, 
+                                    int pair_id) {
         const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
 
+        // Check if the file needs a header
         bool write_header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
 
         if (csv_file.is_open()) {
+            // Write the header if needed
             if (write_header) {
-                csv_file << "PairID,Algorithm";
+                csv_file << "PairID,Algorithm,Time";
                 for (int i = 1; i <= 7; ++i) {
-                    csv_file << ",Joint" << i;
+                    csv_file << ",Joint" << i << "_Position,Joint" << i << "_Velocity,Joint" << i << "_Acceleration";
                 }
                 csv_file << "\n";
             }
 
-            // Save RRT trajectory
+            // Function to write a single trajectory point to the CSV file
+            auto write_trajectory_point = [&](const auto& point, const std::string& algorithm) {
+                double time_in_seconds = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9;
+                csv_file << pair_id << "," << algorithm << "," << time_in_seconds;
+                for (const auto& position : point.positions) {
+                    csv_file << "," << position;
+                }
+                for (const auto& velocity : point.velocities) {
+                    csv_file << "," << velocity;
+                }
+                for (const auto& acceleration : point.accelerations) {
+                    csv_file << "," << acceleration;
+                }
+                csv_file << "\n";
+            };
+
+            // Save RRT trajectory points
             for (const auto& point : rrt_plan.trajectory_.joint_trajectory.points) {
-                csv_file << pair_id << ",RRT";
-                for (const auto& position : point.positions) {
-                    csv_file << "," << position;
-                }
-                csv_file << "\n";
+                write_trajectory_point(point, "RRT");
             }
 
-            // Save CHOMP trajectory
+            // Save CHOMP trajectory points
             for (const auto& point : chomp_plan.trajectory_.joint_trajectory.points) {
-                csv_file << pair_id << ",CHOMP";
-                for (const auto& position : point.positions) {
-                    csv_file << "," << position;
-                }
-                csv_file << "\n";
+                write_trajectory_point(point, "CHOMP");
             }
 
             csv_file.close();
@@ -337,6 +375,7 @@ private:
             RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
         }
     }
+
 
     // Function to save the end effector position data to CSV
     void save_end_effector_position_data_to_csv(
@@ -411,6 +450,40 @@ private:
 
             csv_file.close();
             RCLCPP_INFO(this->get_logger(), "Trajectory data saved to %s", filename.c_str());
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
+        }
+    }
+
+    // Function to save metrics to CSV
+    void save_metrics_to_csv(const std::string& algorithm, 
+                            int pair_id, 
+                            long int planning_time, 
+                            long int execution_time, 
+                            double smoothness, 
+                            double path_length) {
+        const std::string filename = "src/PlannerGAN/data/metrics_data.csv";
+        std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
+
+        // Check if the file needs a header
+        bool write_header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
+
+        if (csv_file.is_open()) {
+            // Write the header if needed
+            if (write_header) {
+                csv_file << "PairID,Algorithm,PlanningTime_ms,ExecutionTime_ms,Smoothness,PathLength\n";
+            }
+
+            // Write the data
+            csv_file << pair_id << ","
+                    << algorithm << ","
+                    << planning_time << ","
+                    << execution_time << ","
+                    << smoothness << ","
+                    << path_length << "\n";
+
+            csv_file.close();
+            RCLCPP_INFO(this->get_logger(), "Metrics data saved to %s", filename.c_str());
         } else {
             RCLCPP_ERROR(this->get_logger(), "Unable to open file %s for writing", filename.c_str());
         }
