@@ -4,6 +4,7 @@
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/robot_state/robot_state.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <chrono>
 #include <fstream>
@@ -39,7 +40,7 @@ public:
 
     // Main planning function
     void start_planning() {
-
+ 
         // Separate vectors for RRT and CHOMP end effector poses
         std::vector<std::vector<geometry_msgs::msg::Pose>> rrt_joint_poses;
         std::vector<std::vector<geometry_msgs::msg::Pose>> chomp_joint_poses;
@@ -60,6 +61,9 @@ public:
         // Initialize the MoveGroupInterface for the robot arm
         moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
         rclcpp::sleep_for(std::chrono::seconds(5)); // Allow time for initialization
+
+        // Add obstacles to the planning scene
+        add_obstacles(move_group);
 
         // Define the target pose for the robot's end effector
         geometry_msgs::msg::Pose target_pose = create_target_pose();
@@ -135,6 +139,43 @@ public:
         }
 
     }
+
+    void add_obstacles(moveit::planning_interface::MoveGroupInterface& move_group) {
+        moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+        std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
+
+        // Function to create a box obstacle
+        auto create_box_obstacle = [&](const std::string& id, double x, double y, double z, 
+                                    double size_x, double size_y, double size_z) {
+            moveit_msgs::msg::CollisionObject box;
+            box.header.frame_id = move_group.getPlanningFrame();
+            box.id = id;
+
+            shape_msgs::msg::SolidPrimitive primitive;
+            primitive.type = primitive.BOX;
+            primitive.dimensions = {size_x, size_y, size_z};
+
+            geometry_msgs::msg::Pose box_pose;
+            box_pose.orientation.w = 1.0;
+            box_pose.position.x = x;
+            box_pose.position.y = y;
+            box_pose.position.z = z;
+
+            box.primitives.push_back(primitive);
+            box.primitive_poses.push_back(box_pose);
+            box.operation = box.ADD;
+
+            return box;
+        };
+
+        // Add several boxes to the environment
+        collision_objects.push_back(create_box_obstacle("box1", 0.0, -0.4, 0.5, 0.4, 0.4, 0.4));
+        collision_objects.push_back(create_box_obstacle("box2", 0.5, -0.4, 0.2, 0.3, 0.3, 0.3));
+        collision_objects.push_back(create_box_obstacle("box3", -0.5, 0.4, 0.3, 0.2, 0.2, 0.2));
+
+        planning_scene_interface.applyCollisionObjects(collision_objects);
+    }
+
 
 private:
 
