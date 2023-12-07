@@ -16,8 +16,8 @@ public:
 
     // Public member variable
     int pair_id = 0;
-    bool first = true;
 
+    bool first = true;
     geometry_msgs::msg::Pose start_pose;
     geometry_msgs::msg::Pose target_pose;
 
@@ -34,26 +34,33 @@ public:
 
     // Run the planning function n times
     void start_planning_n_samples(int n_iterations, int n_samples) {
+        // Initialize the MoveGroupInterface for the robot arm
+        moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
+        rclcpp::sleep_for(std::chrono::seconds(5)); // Allow time for initialization
+
+        moveit::planning_interface::MoveGroupInterface::Plan initial_plan;
+
         for (int i = 0; i < n_iterations; ++i) {
-            // FLOW: Save start pose based on last end pose, if not first; otherwise, create new random start pose
-            if (!first) {
-                start_pose = target_pose;
+            // FLOW: Move arm to initial start position if first run
+            if (first) {
+                start_pose = create_random_pose(move_group);
+                reset_to_start_position(move_group, initial_plan);
+                first = false;
             } else {
-                start_pose = create_random_pose();
+                start_pose = target_pose;
             }
             // FLOW: Set target pose to new random pose
-            target_pose = create_random_pose();
+            target_pose = create_random_pose(move_group);
             // FLOW: Run n sample iterations with these start and end pose parameters
             for (int j = 0; j < n_samples; ++j) {
-                RCLCPP_INFO(this->get_logger(), "****Iteration Number: %d. Sample Number: %d. Pair ID: %d****", i, j, pair_id);
-                start_planning();
+                RCLCPP_INFO(this->get_logger(), "\n\n\n\n****Iteration Number: %d. Sample Number: %d. Pair ID: %d****", i, j, pair_id);
+                start_planning(move_group);
             }
         }
     }
 
     // Main planning function
-    void start_planning() {
- 
+    void start_planning(moveit::planning_interface::MoveGroupInterface& move_group) {
         // Separate vectors for RRT and CHOMP end effector poses
         std::vector<std::vector<geometry_msgs::msg::Pose>> rrt_joint_poses;
         std::vector<std::vector<geometry_msgs::msg::Pose>> chomp_joint_poses;
@@ -71,18 +78,11 @@ public:
         moveit::planning_interface::MoveGroupInterface::Plan rrt_plan;
         moveit::planning_interface::MoveGroupInterface::Plan chomp_plan;
 
-        moveit::planning_interface::MoveGroupInterface::Plan reset_plan1;
-        moveit::planning_interface::MoveGroupInterface::Plan reset_plan2;
-
-        // Initialize the MoveGroupInterface for the robot arm
-        moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
-        rclcpp::sleep_for(std::chrono::seconds(5)); // Allow time for initialization
+        // Declare initial plan reset plan
+        moveit::planning_interface::MoveGroupInterface::Plan reset_plan;
 
         // Add obstacles to the planning scene
         add_obstacles(move_group);
-
-        // Define the target pose for the robot's end effector
-        geometry_msgs::msg::Pose target_pose = create_target_pose();
 
         // Variables to store various metrics
         double rrt_path_length, rrt_smoothness, chomp_path_length, chomp_smoothness;
@@ -91,11 +91,11 @@ public:
         bool first_reset_success = false, second_reset_success = false;
 
         // Reset the robot to its start position
-        first_reset_success = reset_to_start_position(move_group, reset_plan1);
+        first_reset_success = reset_to_start_position(move_group, reset_plan);
 
         // Execute planning using the RRT algorithm
         if (first_reset_success) {
-            RCLCPP_INFO(this->get_logger(), "Starting planning with RRT...");
+            RCLCPP_INFO(this->get_logger(), "\nStarting planning with RRT...");
             rrt_success = plan_and_execute(move_group,
                                       "RRTkConfigDefault",
                                        target_pose,
@@ -106,11 +106,11 @@ public:
                                        rrt_planning_time,
                                        rrt_execution_time,
                                        rrt_plan);
-            RCLCPP_INFO(this->get_logger(), "RRT Planning and execution complete");
+            RCLCPP_INFO(this->get_logger(), "\nRRT Planning and execution complete");
 
-            RCLCPP_INFO(this->get_logger(), "RRT Path Length: %f", path_length_rrt);
-            RCLCPP_INFO(this->get_logger(), "RRT Planning Time: %ld", planning_time_rrt);
-            RCLCPP_INFO(this->get_logger(), "RRT Execution Time: %ld", execution_time_rrt);
+            RCLCPP_INFO(this->get_logger(), "\nRRT Path Length: %f", rrt_path_length);
+            RCLCPP_INFO(this->get_logger(), "\nRRT Planning Time: %ld", rrt_planning_time);
+            RCLCPP_INFO(this->get_logger(), "\nRRT Execution Time: %ld", rrt_execution_time);
         }
 
         // Execute planning using RRT and save the poses if successful
@@ -122,11 +122,11 @@ public:
         }
 
         // Reset the robot to its start position
-        second_reset_success = reset_to_start_position(move_group, reset_plan2);
+        second_reset_success = reset_to_start_position(move_group, reset_plan);
 
         if (second_reset_success) {
             // Execute planning using the CHOMP algorithm
-            RCLCPP_INFO(this->get_logger(), "Starting planning with CHOMP...");
+            RCLCPP_INFO(this->get_logger(), "\nStarting planning with CHOMP...");
             chomp_success = plan_and_execute(move_group,
                                         "CHOMPkConfigDefault", 
                                         target_pose, 
@@ -137,11 +137,11 @@ public:
                                         chomp_planning_time, 
                                         chomp_execution_time, 
                                         chomp_plan);
-            RCLCPP_INFO(this->get_logger(), "CHOMP Planning and execution complete");
+            RCLCPP_INFO(this->get_logger(), "\nCHOMP Planning and execution complete");
 
-            RCLCPP_INFO(this->get_logger(), "CHOMP Path Length: %f", path_length_chomp);
-            RCLCPP_INFO(this->get_logger(), "CHOMP Planning Time: %ld", planning_time_chomp);
-            RCLCPP_INFO(this->get_logger(), "CHOMP Execution Time: %ld", execution_time_chomp);
+            RCLCPP_INFO(this->get_logger(), "\nCHOMP Path Length: %f", chomp_path_length);
+            RCLCPP_INFO(this->get_logger(), "\nCHOMP Planning Time: %ld", chomp_planning_time);
+            RCLCPP_INFO(this->get_logger(), "\nCHOMP Execution Time: %ld", chomp_execution_time);
         }
 
         // Execute planning using CHOMP and save the poses if successful
@@ -153,8 +153,8 @@ public:
         }
 
         // Save data to CSV if both plans are successful
-        if (rrt_success && chomp_success && (path_length_chomp < path_length_rrt) && (planning_time_chomp < planning_time_rrt) && (execution_time_chomp < execution_time_rrt)) {
-            RCLCPP_INFO(this->get_logger(), "All checks passed, saving data to csv...");
+        if (rrt_success && chomp_success /*&& (chomp_path_length < rrt_path_length) && (chomp_planning_time < rrt_planning_time) && (chomp_execution_time < rrt_execution_time)*/) {
+            RCLCPP_INFO(this->get_logger(), "\nAll checks passed, saving data to csv...");
             // Save trajectory data to CSV
             save_trajectory_data_to_csv(rrt_plan, chomp_plan, pair_id); 
             // Save end effector data to CSV
@@ -166,6 +166,8 @@ public:
             save_metrics_to_csv("CHOMP", pair_id, chomp_planning_time, chomp_execution_time, chomp_smoothness, chomp_path_length);
             // Increment pair id
             pair_id++; 
+        } else {
+            RCLCPP_WARN(this->get_logger(), "\n***FILTERED OUT PAIR ID: %d***", pair_id);
         }
 
     }
@@ -232,7 +234,7 @@ private:
 
         // If planning was successful, execute the plan
         if (success) {
-            RCLCPP_INFO(this->get_logger(), "Plan successful, executing...");
+            RCLCPP_INFO(this->get_logger(), "\nPlan successful, executing...");
             start_time = std::chrono::steady_clock::now(); // Start timing the execution
             move_group.move(); // Execute the plan
             end_time = std::chrono::steady_clock::now(); // End timing the execution
@@ -247,10 +249,10 @@ private:
             // Analyze the trajectory for path length and smoothness
             analyze_trajectory(plan.trajectory_.joint_trajectory, path_length, smoothness);
 
-            RCLCPP_INFO(this->get_logger(), "Path Length: %f, Smoothness: %f", path_length, smoothness);
-            RCLCPP_INFO(this->get_logger(), "Planning Time: %ld ms, Execution Time: %ld ms", planning_time, execution_time);
+            RCLCPP_INFO(this->get_logger(), "\nPath Length: %f, Smoothness: %f", path_length, smoothness);
+            RCLCPP_INFO(this->get_logger(), "\nPlanning Time: %ld ms, Execution Time: %ld ms", planning_time, execution_time);
         } else {
-            RCLCPP_WARN(this->get_logger(), "Planning failed.");
+            RCLCPP_WARN(this->get_logger(), "\nPlanning failed.");
         }
 
         return success;
@@ -281,7 +283,6 @@ private:
             end_effector_poses.push_back(pose);
         }
     }
-
 
     // Function to convert joint trajectory to all joint positions
     void traj2allJointPositions(const moveit::planning_interface::MoveGroupInterface::Plan& plan, 
@@ -321,16 +322,33 @@ private:
     }
 
     // Function to create a random pose for the end effector
-    geometry_msgs::msg::Pose create_random_pose() {
-        geometry_msgs::msg::Pose pose;
-        pose.position.x = ((double) rand() / (RAND_MAX));
-        pose.position.y = ((double) rand() / (RAND_MAX));
-        pose.position.z = ((double) rand() / (RAND_MAX));
-        RCLCPP_INFO(this->get_logger(), "Target X: %f", pose.position.x);
-        RCLCPP_INFO(this->get_logger(), "Target Y: %f", pose.position.y);
-        RCLCPP_INFO(this->get_logger(), "Target Z: %f", pose.position.z);
-        pose.orientation.w = 1.0;
-        return pose;
+    // Returns valid path using RRT to chosen position
+    geometry_msgs::msg::Pose create_random_pose(moveit::planning_interface::MoveGroupInterface& move_group) {
+        while (true)
+        {
+            geometry_msgs::msg::Pose pose;
+            double randX = ((double) rand() / (RAND_MAX));
+            if (randX > 0.5) { randX += 1; }
+            pose.position.x = randX;
+            pose.position.y = (((double) rand() / (RAND_MAX)) * 2) - 1;
+            pose.position.z = ((double) rand() / (RAND_MAX));
+            RCLCPP_INFO(this->get_logger(), "Target X: %f", pose.position.x);
+            RCLCPP_INFO(this->get_logger(), "Target Y: %f", pose.position.y);
+            RCLCPP_INFO(this->get_logger(), "Target Z: %f", pose.position.z);
+            pose.orientation.w = 1.0;
+
+            // FLOW: Create plan based on new pose; if valid pose, return plan; if not, try again
+            moveit::planning_interface::MoveGroupInterface::Plan plan;
+            move_group.setPlannerId("RRTkConfigDefault");
+            move_group.setPoseTarget(pose);
+
+            if (move_group.plan(plan) == moveit::core::MoveItErrorCode::SUCCESS) {
+                RCLCPP_INFO(this->get_logger(), "\nValid position found...");
+                return pose;
+            } else {
+                RCLCPP_WARN(this->get_logger(), "\nPosition invalid, trying again...");
+            }
+        }
     }
 
     // Function to reset the robot to its start position
@@ -344,11 +362,10 @@ private:
 
         // If planning was successful, execute the plan
         if (success) {
-            RCLCPP_INFO(this->get_logger(), "Setup plan successful, executing...");
+            RCLCPP_INFO(this->get_logger(), "\nSetup plan successful, executing...");
             move_group.move(); // Execute the plan
         } else {
-            // TODO: Run again
-            RCLCPP_WARN(this->get_logger(), "Setup planning failed.");
+            RCLCPP_WARN(this->get_logger(), "\nSetup planning failed.");
         }
 
         return success;
