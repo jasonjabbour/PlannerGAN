@@ -36,6 +36,7 @@ public:
         
         // File name to get the last pair id created
         const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
+        // const std::string filename = "trajectory_data.csv";
         // Update the pair id
         pair_id = get_last_pair_id_from_csv(filename) + 1;
 
@@ -88,7 +89,7 @@ public:
         moveit::planning_interface::MoveGroupInterface::Plan reset_plan;
 
         // Add obstacles to the planning scene
-        // add_obstacles(move_group);
+        add_obstacles(move_group);
 
         // Variables to store various metrics
         double algo1_path_length, algo1_smoothness, algo2_path_length, algo2_smoothness;
@@ -171,6 +172,7 @@ public:
     }
 
     void add_obstacles(moveit::planning_interface::MoveGroupInterface& move_group) {
+
         moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
         std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
 
@@ -199,11 +201,16 @@ public:
         };
 
         // Add several boxes to the environment
-        collision_objects.push_back(create_box_obstacle("box1", 0.0, -0.4, 0.5, 0.4, 0.4, 0.4));
-        collision_objects.push_back(create_box_obstacle("box2", 0.5, -0.4, 0.2, 0.3, 0.3, 0.3));
-        collision_objects.push_back(create_box_obstacle("box3", -0.5, 0.4, 0.3, 0.2, 0.2, 0.2));
+        // collision_objects.push_back(create_box_obstacle("box1", 0.0, -0.4, 0.5, 0.4, 0.4, 0.4));
+        // collision_objects.push_back(create_box_obstacle("box2", 0.5, -0.4, 0.2, 0.3, 0.3, 0.3));
+        // collision_objects.push_back(create_box_obstacle("box3", -0.5, 0.4, 0.3, 0.2, 0.2, 0.2));
+
+        // Add a floor to the environment
+        collision_objects.push_back(create_box_obstacle("floor", 1.0, 0.0, 0.05, 3.0, 3.0, 0.1));
+
 
         planning_scene_interface.applyCollisionObjects(collision_objects);
+
     }
 
 
@@ -329,7 +336,7 @@ private:
             if (randX > 0.5) { randX += 1; }
             pose.position.x = randX;
             pose.position.y = (((double) rand() / (RAND_MAX)) * 2) - 1;
-            pose.position.z = ((double) rand() / (RAND_MAX));
+            pose.position.z = ((double) rand() / (RAND_MAX)) + .1;
             RCLCPP_INFO(this->get_logger(), "Target X: %f", pose.position.x);
             RCLCPP_INFO(this->get_logger(), "Target Y: %f", pose.position.y);
             RCLCPP_INFO(this->get_logger(), "Target Z: %f", pose.position.z);
@@ -421,6 +428,7 @@ private:
                                     const moveit::planning_interface::MoveGroupInterface::Plan& algo2_plan, 
                                     int pair_id) {
         const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
+        // const std::string filename = "trajectory_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
 
         // Check if the file needs a header
@@ -477,6 +485,7 @@ private:
         int pair_id) {
         
         const std::string filename = "src/PlannerGAN/data/end_effector_positions_data.csv";
+        // const std::string filename = "end_effector_positions_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
 
         // Check if the file is new or empty to write the header
@@ -510,6 +519,7 @@ private:
                         const std::vector<std::vector<geometry_msgs::msg::Pose>>& algo2_poses, 
                         int pair_id) {
         const std::string filename = "src/PlannerGAN/data/joint_positions_data.csv";
+        // const std::string filename = "joint_positions_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
 
         bool write_header = !std::filesystem::exists(filename) || std::filesystem::file_size(filename) == 0;
@@ -556,6 +566,7 @@ private:
                             double smoothness, 
                             double path_length) {
         const std::string filename = "src/PlannerGAN/data/metrics_data.csv";
+        // const std::string filename = "metrics_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
 
         // Check if the file needs a header
@@ -632,8 +643,8 @@ int main(int argc, char** argv) {
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
 
     // Run the planning x times with y number of samples
-    int n_iterations = 5;
-    int n_samples = 2;
+    int n_iterations = 400;
+    int n_samples = 1;
     node->start_planning_n_samples(n_iterations, n_samples);
 
     rclcpp::spin(node);
