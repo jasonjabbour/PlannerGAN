@@ -10,6 +10,9 @@
 #include <fstream>
 #include <filesystem>
 
+#include <cstdlib>
+#include <ctime>
+
 // Define the class for the motion planning node
 class MotionPlanningNode : public rclcpp::Node {
 public:
@@ -639,6 +642,9 @@ private:
 };
 
 int main(int argc, char** argv) {
+    // FLOW: Seed random number generator
+    srand(time(NULL));
+
     rclcpp::init(argc, argv);
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
 
