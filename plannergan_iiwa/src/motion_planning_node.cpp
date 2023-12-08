@@ -632,8 +632,8 @@ int main(int argc, char** argv) {
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
 
     // Run the planning x times with y number of samples
-    int n_iterations = 5;
-    int n_samples = 2;
+    int n_iterations = 400;
+    int n_samples = 1;
     node->start_planning_n_samples(n_iterations, n_samples);
 
     rclcpp::spin(node);
