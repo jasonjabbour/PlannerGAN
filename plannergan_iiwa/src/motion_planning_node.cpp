@@ -20,6 +20,15 @@ public:
     bool first = true;
     geometry_msgs::msg::Pose start_pose;
     geometry_msgs::msg::Pose target_pose;
+    // Define the names and ids of the two algorithms 
+    std::string algo1_name = "RRT";
+    std::string algo1_planner_id = "RRTkConfigDefault";
+
+    std::string algo2_name = "RRT*";
+    std::string algo2_planner_id = "RRTstarkConfigDefault";
+
+    // std::string algo2_name = "CHOMP";
+    // std::string algo2_planner_id = "CHOMPkConfigDefault";
 
     // Constructor for the node
     explicit MotionPlanningNode(const rclcpp::NodeOptions& options)
@@ -37,14 +46,11 @@ public:
         // Initialize the MoveGroupInterface for the robot arm
         moveit::planning_interface::MoveGroupInterface move_group(this->shared_from_this(), "iiwa_arm");
         rclcpp::sleep_for(std::chrono::seconds(5)); // Allow time for initialization
-
-        moveit::planning_interface::MoveGroupInterface::Plan initial_plan;
-
+        
         for (int i = 0; i < n_iterations; ++i) {
             // FLOW: Move arm to initial start position if first run
             if (first) {
                 start_pose = create_random_pose(move_group);
-                reset_to_start_position(move_group, initial_plan);
                 first = false;
             } else {
                 start_pose = target_pose;
@@ -61,33 +67,33 @@ public:
 
     // Main planning function
     void start_planning(moveit::planning_interface::MoveGroupInterface& move_group) {
-        // Separate vectors for RRT and CHOMP end effector poses
-        std::vector<std::vector<geometry_msgs::msg::Pose>> rrt_joint_poses;
-        std::vector<std::vector<geometry_msgs::msg::Pose>> chomp_joint_poses;
+        // Separate vectors for the two algorithm's end effector poses
+        std::vector<std::vector<geometry_msgs::msg::Pose>> algo1_joint_poses;
+        std::vector<std::vector<geometry_msgs::msg::Pose>> algo2_joint_poses;
 
         // Vector to store poses of the end effector for each point in the trajectory
-        std::vector<geometry_msgs::msg::Pose> rrt_end_effector_poses;
-        std::vector<geometry_msgs::msg::Pose> chomp_end_effector_poses;
+        std::vector<geometry_msgs::msg::Pose> algo1_end_effector_poses;
+        std::vector<geometry_msgs::msg::Pose> algo2_end_effector_poses;
 
         // 2D Vector to store poses for each joint at each point in the trajectory
         std::vector<std::vector<geometry_msgs::msg::Pose>> all_joint_poses;
         // Vector to store end effector poses at each point in the trajectory
         std::vector<geometry_msgs::msg::Pose> end_effector_poses;
 
-        // Declare plans for RRT and CHOMP
-        moveit::planning_interface::MoveGroupInterface::Plan rrt_plan;
-        moveit::planning_interface::MoveGroupInterface::Plan chomp_plan;
+        // Declare plans for both algorithms
+        moveit::planning_interface::MoveGroupInterface::Plan algo1_plan;
+        moveit::planning_interface::MoveGroupInterface::Plan algo2_plan;
 
         // Declare initial plan reset plan
         moveit::planning_interface::MoveGroupInterface::Plan reset_plan;
 
         // Add obstacles to the planning scene
-        add_obstacles(move_group);
+        // add_obstacles(move_group);
 
         // Variables to store various metrics
-        double rrt_path_length, rrt_smoothness, chomp_path_length, chomp_smoothness;
-        long int rrt_planning_time, rrt_execution_time, chomp_planning_time, chomp_execution_time;
-        bool rrt_success = false, chomp_success = false; // Flags for the success of each planning algorithm
+        double algo1_path_length, algo1_smoothness, algo2_path_length, algo2_smoothness;
+        long int algo1_planning_time, algo1_execution_time, algo2_planning_time, algo2_execution_time;
+        bool algo1_success = false, algo2_success = false; // Flags for the success of each planning algorithm
         bool first_reset_success = false, second_reset_success = false;
 
         // Reset the robot to its start position
@@ -95,75 +101,67 @@ public:
 
         // Execute planning using the RRT algorithm
         if (first_reset_success) {
-            RCLCPP_INFO(this->get_logger(), "\nStarting planning with RRT...");
-            rrt_success = plan_and_execute(move_group,
-                                      "RRTkConfigDefault",
-                                       target_pose,
-                                       end_effector_poses,
-                                       all_joint_poses,
-                                       rrt_path_length,
-                                       rrt_smoothness,
-                                       rrt_planning_time,
-                                       rrt_execution_time,
-                                       rrt_plan);
-            RCLCPP_INFO(this->get_logger(), "\nRRT Planning and execution complete");
-
-            RCLCPP_INFO(this->get_logger(), "\nRRT Path Length: %f", rrt_path_length);
-            RCLCPP_INFO(this->get_logger(), "\nRRT Planning Time: %ld", rrt_planning_time);
-            RCLCPP_INFO(this->get_logger(), "\nRRT Execution Time: %ld", rrt_execution_time);
+            RCLCPP_INFO(this->get_logger(), "Starting planning with %s...", algo1_name.c_str());
+            algo1_success = plan_and_execute(move_group,
+                                        algo1_planner_id,
+                                        target_pose,
+                                        end_effector_poses,
+                                        all_joint_poses,
+                                        algo1_path_length,
+                                        algo1_smoothness,
+                                        algo1_planning_time,
+                                        algo1_execution_time,
+                                        algo1_plan);
+            RCLCPP_INFO(this->get_logger(), "%s Planning and execution complete", algo1_name.c_str());
         }
 
-        // Execute planning using RRT and save the poses if successful
-        if (rrt_success) {
-            // Save RRT poses
-            rrt_joint_poses = all_joint_poses; 
+        // Save the poses if successful
+        if (algo1_success) {
+            // Save poses
+            algo1_joint_poses = all_joint_poses; 
             // Save end effector poses
-            rrt_end_effector_poses = end_effector_poses; 
+            algo1_end_effector_poses = end_effector_poses; 
         }
 
         // Reset the robot to its start position
         second_reset_success = reset_to_start_position(move_group, reset_plan);
 
         if (second_reset_success) {
-            // Execute planning using the CHOMP algorithm
-            RCLCPP_INFO(this->get_logger(), "\nStarting planning with CHOMP...");
-            chomp_success = plan_and_execute(move_group,
-                                        "CHOMPkConfigDefault", 
-                                        target_pose, 
-                                        end_effector_poses,
-                                        all_joint_poses, 
-                                        chomp_path_length, 
-                                        chomp_smoothness, 
-                                        chomp_planning_time, 
-                                        chomp_execution_time, 
-                                        chomp_plan);
-            RCLCPP_INFO(this->get_logger(), "\nCHOMP Planning and execution complete");
-
-            RCLCPP_INFO(this->get_logger(), "\nCHOMP Path Length: %f", chomp_path_length);
-            RCLCPP_INFO(this->get_logger(), "\nCHOMP Planning Time: %ld", chomp_planning_time);
-            RCLCPP_INFO(this->get_logger(), "\nCHOMP Execution Time: %ld", chomp_execution_time);
+            // Execute planning using the algo2
+            RCLCPP_INFO(this->get_logger(), "Starting planning with %s...", algo2_name.c_str());
+            algo2_success = plan_and_execute(move_group,
+                                            algo2_planner_id, 
+                                            target_pose, 
+                                            end_effector_poses,
+                                            all_joint_poses, 
+                                            algo2_path_length, 
+                                            algo2_smoothness, 
+                                            algo2_planning_time, 
+                                            algo2_execution_time, 
+                                            algo2_plan);
+            RCLCPP_INFO(this->get_logger(), "%s Planning and execution complete", algo2_name.c_str());
         }
 
-        // Execute planning using CHOMP and save the poses if successful
-        if (chomp_success) {
-            // Save CHOMP poses
-            chomp_joint_poses = all_joint_poses;
-            // Save CHOMP end effector poses
-            chomp_end_effector_poses = end_effector_poses; 
+        // Save the poses if successful
+        if (algo2_success) {
+            // Save poses
+            algo2_joint_poses = all_joint_poses;
+            // Save end effector poses
+            algo2_end_effector_poses = end_effector_poses; 
         }
 
         // Save data to CSV if both plans are successful
-        if (rrt_success && chomp_success /*&& (chomp_path_length < rrt_path_length) && (chomp_planning_time < rrt_planning_time) && (chomp_execution_time < rrt_execution_time)*/) {
+        if (algo1_success && algo2_success/*&& (chomp_path_length < rrt_path_length) && (chomp_planning_time < rrt_planning_time) && (chomp_execution_time < rrt_execution_time)*/) {
             RCLCPP_INFO(this->get_logger(), "\nAll checks passed, saving data to csv...");
             // Save trajectory data to CSV
-            save_trajectory_data_to_csv(rrt_plan, chomp_plan, pair_id); 
+            save_trajectory_data_to_csv(algo1_plan, algo2_plan, pair_id); 
             // Save end effector data to CSV
-            save_end_effector_position_data_to_csv(rrt_end_effector_poses, chomp_end_effector_poses, pair_id);
+            save_end_effector_position_data_to_csv(algo1_end_effector_poses, algo2_end_effector_poses, pair_id);
             // Save joint position data to CSV
-            save_joint_position_data_to_csv(rrt_joint_poses, chomp_joint_poses, pair_id);
-            // Save RRT and CHOMP metrics to CSV
-            save_metrics_to_csv("RRT", pair_id, rrt_planning_time, rrt_execution_time, rrt_smoothness, rrt_path_length);
-            save_metrics_to_csv("CHOMP", pair_id, chomp_planning_time, chomp_execution_time, chomp_smoothness, chomp_path_length);
+            save_joint_position_data_to_csv(algo1_joint_poses, algo2_joint_poses, pair_id);
+            // Save metrics to CSV
+            save_metrics_to_csv(algo1_name, pair_id, algo1_planning_time, algo1_execution_time, algo1_smoothness, algo1_path_length);
+            save_metrics_to_csv(algo2_name, pair_id, algo2_planning_time, algo2_execution_time, algo2_smoothness, algo2_path_length);
             // Increment pair id
             pair_id++; 
         } else {
@@ -419,8 +417,8 @@ private:
     }
 
     // Function to save the trajectory data to a CSV file
-    void save_trajectory_data_to_csv(const moveit::planning_interface::MoveGroupInterface::Plan& rrt_plan, 
-                                    const moveit::planning_interface::MoveGroupInterface::Plan& chomp_plan, 
+    void save_trajectory_data_to_csv(const moveit::planning_interface::MoveGroupInterface::Plan& algo1_plan, 
+                                    const moveit::planning_interface::MoveGroupInterface::Plan& algo2_plan, 
                                     int pair_id) {
         const std::string filename = "src/PlannerGAN/data/trajectory_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
@@ -454,14 +452,14 @@ private:
                 csv_file << "\n";
             };
 
-            // Save RRT trajectory points
-            for (const auto& point : rrt_plan.trajectory_.joint_trajectory.points) {
-                write_trajectory_point(point, "RRT");
+            // Save algo1 trajectory points
+            for (const auto& point : algo1_plan.trajectory_.joint_trajectory.points) {
+                write_trajectory_point(point, algo1_name);
             }
 
-            // Save CHOMP trajectory points
-            for (const auto& point : chomp_plan.trajectory_.joint_trajectory.points) {
-                write_trajectory_point(point, "CHOMP");
+            // Save algo2 trajectory points
+            for (const auto& point : algo2_plan.trajectory_.joint_trajectory.points) {
+                write_trajectory_point(point, algo2_name);
             }
 
             csv_file.close();
@@ -474,8 +472,8 @@ private:
 
     // Function to save the end effector position data to CSV
     void save_end_effector_position_data_to_csv(
-        const std::vector<geometry_msgs::msg::Pose>& rrt_end_effector_poses, 
-        const std::vector<geometry_msgs::msg::Pose>& chomp_end_effector_poses, 
+        const std::vector<geometry_msgs::msg::Pose>& algo1_end_effector_poses, 
+        const std::vector<geometry_msgs::msg::Pose>& algo2_end_effector_poses, 
         int pair_id) {
         
         const std::string filename = "src/PlannerGAN/data/end_effector_positions_data.csv";
@@ -490,14 +488,14 @@ private:
                 csv_file << "PairID,Algorithm,X,Y,Z\n";
             }
 
-            // Save RRT end effector positions
-            for (const auto& pose : rrt_end_effector_poses) {
-                csv_file << pair_id << ",RRT," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
+            // Save algo1 end effector positions
+            for (const auto& pose : algo1_end_effector_poses) {
+                csv_file << pair_id << "," << algo1_name << "," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
             }
 
-            // Save CHOMP end effector positions
-            for (const auto& pose : chomp_end_effector_poses) {
-                csv_file << pair_id << ",CHOMP," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
+            // Save algo2 end effector positions
+            for (const auto& pose : algo2_end_effector_poses) {
+                csv_file << pair_id << "," << algo2_name << "," << pose.position.x << "," << pose.position.y << "," << pose.position.z << "\n";
             }
 
             csv_file.close();
@@ -508,8 +506,8 @@ private:
     }
 
     // Function to save the joint position data to CSV
-    void save_joint_position_data_to_csv(const std::vector<std::vector<geometry_msgs::msg::Pose>>& rrt_poses, 
-                        const std::vector<std::vector<geometry_msgs::msg::Pose>>& chomp_poses, 
+    void save_joint_position_data_to_csv(const std::vector<std::vector<geometry_msgs::msg::Pose>>& algo1_poses, 
+                        const std::vector<std::vector<geometry_msgs::msg::Pose>>& algo2_poses, 
                         int pair_id) {
         const std::string filename = "src/PlannerGAN/data/joint_positions_data.csv";
         std::ofstream csv_file(filename, std::ios::app); // Open file in append mode
@@ -525,19 +523,19 @@ private:
                 csv_file << "\n";
             }
 
-            for (size_t i = 0; i < rrt_poses.size(); ++i) { // Iterate over each point in the trajectory
-                csv_file << pair_id << ",RRT";
-                for (size_t j = 0; j < rrt_poses[i].size(); ++j) { // Iterate over each joint
-                    const auto& pose = rrt_poses[i][j];
+            for (size_t i = 0; i < algo1_poses.size(); ++i) { // Iterate over each point in the trajectory
+                csv_file << pair_id << "," << algo1_name;
+                for (size_t j = 0; j < algo1_poses[i].size(); ++j) { // Iterate over each joint
+                    const auto& pose = algo1_poses[i][j];
                     csv_file << "," << pose.position.x << "," << pose.position.y << "," << pose.position.z;
                 }
                 csv_file << "\n";
             }
 
-            for (size_t i = 0; i < chomp_poses.size(); ++i) { // Similarly for CHOMP
-                csv_file << pair_id << ",CHOMP";
-                for (size_t j = 0; j < chomp_poses[i].size(); ++j) {
-                    const auto& pose = chomp_poses[i][j];
+            for (size_t i = 0; i < algo2_poses.size(); ++i) { // Similarly for algo2
+                csv_file << pair_id << "," << algo2_name;
+                for (size_t j = 0; j < algo2_poses[i].size(); ++j) {
+                    const auto& pose = algo2_poses[i][j];
                     csv_file << "," << pose.position.x << "," << pose.position.y << "," << pose.position.z;
                 }
                 csv_file << "\n";
@@ -634,7 +632,7 @@ int main(int argc, char** argv) {
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
 
     // Run the planning x times with y number of samples
-    int n_iterations = 2;
+    int n_iterations = 5;
     int n_samples = 2;
     node->start_planning_n_samples(n_iterations, n_samples);
 
