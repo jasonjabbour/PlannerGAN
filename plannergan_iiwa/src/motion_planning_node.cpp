@@ -9,6 +9,8 @@
 #include <chrono>
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
+#include <ctime> 
 
 // Define the class for the motion planning node
 class MotionPlanningNode : public rclcpp::Node {
@@ -639,6 +641,9 @@ private:
 };
 
 int main(int argc, char** argv) {
+    // Seed the random number generator with the current time
+    srand(time(NULL));
+
     rclcpp::init(argc, argv);
     auto node = std::make_shared<MotionPlanningNode>(rclcpp::NodeOptions());
 
