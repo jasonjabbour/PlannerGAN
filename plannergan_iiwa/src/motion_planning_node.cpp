@@ -336,7 +336,7 @@ private:
             if (randX > 0.5) { randX += 1; }
             pose.position.x = randX;
             pose.position.y = (((double) rand() / (RAND_MAX)) * 2) - 1;
-            pose.position.z = ((double) rand() / (RAND_MAX));
+            pose.position.z = ((double) rand() / (RAND_MAX)) + .1;
             RCLCPP_INFO(this->get_logger(), "Target X: %f", pose.position.x);
             RCLCPP_INFO(this->get_logger(), "Target Y: %f", pose.position.y);
             RCLCPP_INFO(this->get_logger(), "Target Z: %f", pose.position.z);
