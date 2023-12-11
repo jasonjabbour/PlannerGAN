@@ -44,6 +44,8 @@ Launch Files to Choose from:
 # Run the simulation and planning
 ros2 launch plannergan_iiwa iiwa_pg.launch.py use_sim:="true" use_planning:="true"
 
+# Run the simulation, planning, and convert a set of trajectories to end effector positions
+ros2 launch plannergan_iiwa iiwa_pg.launch.py use_sim:="true" use_planning:="true" convert_traj:="true"
 ```
 
 ![](captures/gazebo_setup.png)

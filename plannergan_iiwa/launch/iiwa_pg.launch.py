@@ -137,6 +137,13 @@ def generate_launch_description():
             description='Configuration file of robot base frame wrt World.',
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            'convert_traj',
+            default_value='false',
+            description='Convert a trajectory to end effector position.',
+        )
+    )
 
     # Initialize Arguments
     runtime_config_package = LaunchConfiguration('runtime_config_package')
@@ -156,6 +163,7 @@ def generate_launch_description():
     command_interface = LaunchConfiguration('command_interface')
     base_frame_file = LaunchConfiguration('base_frame_file')
     namespace = LaunchConfiguration('namespace')
+    convert_traj = LaunchConfiguration('convert_traj')
 
     # Get URDF via xacro
     robot_description_content = Command(

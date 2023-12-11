@@ -425,6 +425,7 @@ private:
         smoothness = total_acceleration_change / (trajectory.points.size() - 2);
     }
 
+    // BUG FIX THIS!!!!!
     // Function to save the trajectory data to a CSV file
     void save_trajectory_data_to_csv(const moveit::planning_interface::MoveGroupInterface::Plan& algo1_plan, 
                                     const moveit::planning_interface::MoveGroupInterface::Plan& algo2_plan, 

@@ -47,9 +47,22 @@ ament_target_dependencies(motion_planning_node
   tf2_eigen
 )
 
-# Install executable
+# Declare executable
+add_executable(traj2position_node src/traj2position_node.cpp)
+ament_target_dependencies(traj2position_node
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+  moveit_core
+  tf2
+  tf2_ros
+  tf2_eigen
+)
+
+# Install executables
 install(TARGETS
   motion_planning_node
+  traj2position_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

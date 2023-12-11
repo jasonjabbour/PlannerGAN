@@ -63,6 +63,13 @@ def generate_launch_description():
             description='Start robot in Gazebo simulation.',
         )
     )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            'convert_traj',
+            default_value='false',
+            description='Convert a trajectory to end effector position.',
+        )
+    )
 
     # Initialize Arguments
     description_package = LaunchConfiguration('description_package')
@@ -72,6 +79,7 @@ def generate_launch_description():
     base_frame_file = LaunchConfiguration('base_frame_file')
     namespace = LaunchConfiguration('namespace')
     use_sim = LaunchConfiguration('use_sim')
+    convert_traj = LaunchConfiguration('convert_traj')
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -199,7 +207,6 @@ def generate_launch_description():
         ],
     )
 
-
     motion_planning_node = Node(
             package='plannergan_iiwa',  
             executable='motion_planning_node',  
@@ -221,6 +228,30 @@ def generate_launch_description():
                 {"use_sim_time": True},
                 {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
             ],
+        )
+
+    traj2position_node = Node(
+            package='plannergan_iiwa',  
+            executable='traj2position_node',  
+            name='traj2position_node',
+            output='screen',
+            parameters=[
+                robot_description,
+                robot_description_semantic,
+                robot_description_kinematics,
+                robot_description_planning_cartesian_limits,
+                robot_description_planning_joint_limits,
+                planning_pipelines_config,
+                ompl_planning_config,
+                chomp_planning_config,
+                trajectory_execution,
+                moveit_controllers,
+                planning_scene_monitor_parameters,
+                move_group_capabilities,
+                {"use_sim_time": True},
+                {"default_planning_pipeline": "ompl"}  # Overriding the default planning pipeline
+            ],
+            condition=IfCondition(convert_traj),
         )
 
 
@@ -252,7 +283,8 @@ def generate_launch_description():
     nodes = [
         move_group_node,
         rviz_node,
-        motion_planning_node
+        motion_planning_node, 
+        traj2position_node
     ]
 
     return LaunchDescription(declared_arguments + nodes)
